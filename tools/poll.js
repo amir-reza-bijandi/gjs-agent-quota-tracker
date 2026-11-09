@@ -1,10 +1,12 @@
 #!/usr/bin/env -S gjs -m
-// Standalone check: validates the usage client against the live API.
+// Standalone check: validates the usage clients against the live API.
 //   gjs -m tools/poll.js                    (uses ~/.claude)
 //   gjs -m tools/poll.js ~/.claude-work      (a second Claude Code profile)
+//   gjs -m tools/poll.js --antigravity       (the Antigravity CLI's /usage)
 import GLib from 'gi://GLib';
 import {UsageClient, defaultConfigDir} from '../src/lib/usageClient.js';
-import {normalizeWindows, normalizeSpend} from '../src/lib/usageModel.js';
+import {AntigravityClient, findAgy} from '../src/lib/antigravityClient.js';
+import {normalizeWindows, normalizeSpend, normalizeAntigravityWindows} from '../src/lib/usageModel.js';
 
 const loop = GLib.MainLoop.new(null, false);
 
@@ -20,9 +22,19 @@ function resolveConfigDir(arg) {
     return GLib.build_filenamev([GLib.get_current_dir(), arg]);
 }
 
-const configDir = resolveConfigDir(typeof ARGV !== 'undefined' ? ARGV[0] : undefined);
+const arg = typeof ARGV !== 'undefined' ? ARGV[0] : undefined;
 
-async function run() {
+function printWindows(windows) {
+    print('\nusage windows (normalised):');
+    for (const w of windows) {
+        const active = w.isActive ? '  [active]' : '';
+        const sev = w.apiLevel !== 'ok' ? `  api:${w.apiLevel}` : '';
+        print(`  ${w.label}: ${Math.round(w.utilization)}%  resets ${w.resetsAt ?? '(n/a)'}${sev}${active}`);
+    }
+}
+
+async function runClaude() {
+    const configDir = resolveConfigDir(arg);
     const client = new UsageClient({configDir});
 
     print('config dir:', configDir);
@@ -41,12 +53,7 @@ async function run() {
     print(`  limits[]: ${Array.isArray(usage.limits) ? usage.limits.length : '(none)'} entr${usage.limits?.length === 1 ? 'y' : 'ies'}`);
 
     // Normalised windows — exactly what the extension renders.
-    print('\nusage windows (normalised):');
-    for (const w of normalizeWindows(usage)) {
-        const active = w.isActive ? '  [active]' : '';
-        const sev = w.apiLevel !== 'ok' ? `  api:${w.apiLevel}` : '';
-        print(`  ${w.label}: ${Math.round(w.utilization)}%  resets ${w.resetsAt ?? '(n/a)'}${sev}${active}`);
-    }
+    printWindows(normalizeWindows(usage));
 
     const spend = normalizeSpend(usage);
     if (spend) {
@@ -55,7 +62,14 @@ async function run() {
     }
 }
 
-run()
+async function runAntigravity() {
+    print('agy:', findAgy() ?? '(not found)');
+    const usage = await new AntigravityClient().fetchUsage();
+    print('\nmodel groups:', usage.groups.map(g => g.name).join(', ') || '(none)');
+    printWindows(normalizeAntigravityWindows(usage));
+}
+
+(arg === '--antigravity' ? runAntigravity() : runClaude())
     .catch(e => {
         printerr('ERROR:', e.message);
         if (e.body)

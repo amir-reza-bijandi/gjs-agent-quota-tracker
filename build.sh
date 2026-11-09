@@ -22,7 +22,7 @@ cd "$(dirname "$0")"
 SRC=src
 OUT=dist
 META="$SRC/metadata.json"
-SCHEMA=schemas/org.gnome.shell.extensions.claude-usage.gschema.xml
+SCHEMA=schemas/org.gnome.shell.extensions.agent-quota-tracker.gschema.xml
 
 # ---- parse the optional version-bump flag ----
 BUMP=""

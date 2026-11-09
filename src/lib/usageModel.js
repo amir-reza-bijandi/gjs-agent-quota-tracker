@@ -237,6 +237,8 @@ export function migratePanelWindows(settings) {
 // The windows the panel should show for a list of selectors: the union of
 // what each selector picks, de-duplicated by key and kept in the windows'
 // own (role) order so the panel always reads session → weekly → per-model.
+// 'five-hour' and 'seven-day' pick every window of their role: one for a
+// Claude account, one per model group for Antigravity.
 // `worstScore(w)` ranks windows for the 'worst' selector (the caller supplies
 // it because the burn-rate severity model lives in the shell code). Falls
 // back to the first window when nothing matched, so a selection that the
@@ -249,18 +251,18 @@ export function selectPanelWindows(windows, selectors, worstScore = w => Number(
         (Number(w.utilization) || 0) > (Number(best.utilization) || 0) ? w : best);
     for (const sel of selectors ?? []) {
         switch (sel) {
-        case 'five-hour': {
-            const w = windows.find(x => x.role === 'session');
-            if (w)
-                picked.add(w.key);
+        case 'five-hour':
+            for (const w of windows) {
+                if (w.role === 'session')
+                    picked.add(w.key);
+            }
             break;
-        }
-        case 'seven-day': {
-            const w = windows.find(x => x.role === 'weekly');
-            if (w)
-                picked.add(w.key);
+        case 'seven-day':
+            for (const w of windows) {
+                if (w.role === 'weekly')
+                    picked.add(w.key);
+            }
             break;
-        }
         case 'scoped':
             for (const w of windows) {
                 if (w.role === 'scoped')
@@ -371,8 +373,11 @@ export function tierIconName(label) {
 }
 
 // Short tag shown before a panel gauge when several windows share the panel:
-// "5h", "7d", or the model name of a per-model window ("7-day Fable" → "Fable").
+// "5h", "7d", or the model name of a per-model window ("7-day Fable" → "Fable"),
+// unless the window carries a tag of its own (Antigravity's, e.g. "Gemini 5h").
 export function windowTag(w) {
+    if (w?.tag)
+        return w.tag;
     switch (w?.role) {
     case 'session':
         return '5h';
@@ -386,6 +391,71 @@ export function windowTag(w) {
     default:
         return String(w?.label ?? '');
     }
+}
+
+// ---- Antigravity ----
+//
+// `agy /usage` reports quota per group of models (today "Gemini Models" and
+// "Claude and GPT models"), each with a 5-hour and a weekly bucket, as the
+// share *left* (remaining_fraction, 0-1). Each bucket becomes an ordinary
+// window, so the panel and popup treat them like Claude's: the 5-hour buckets
+// take the session role, the weekly ones the weekly role.
+
+const AG_WINDOWS = {
+    '5h': {role: 'session', label: '5-hour', tag: '5h', seconds: FIVE_HOUR_SECONDS},
+    'weekly': {role: 'weekly', label: '7-day', tag: '7d', seconds: SEVEN_DAY_SECONDS},
+};
+
+// Utilization (0-100) from a remaining_fraction, or null when it is missing.
+function usedFromRemaining(fraction) {
+    if (fraction === null || fraction === undefined || fraction === '')
+        return null;
+    const f = Number(fraction);
+    return Number.isFinite(f) ? Math.min(100, Math.max(0, (1 - f) * 100)) : null;
+}
+
+// "Claude and GPT models" → "Claude & GPT", "Gemini Models" → "Gemini".
+function agGroupName(name) {
+    return String(name ?? '').replace(/\s+models?$/i, '').replace(/\s+and\s+/gi, ' & ').trim();
+}
+
+// The ordered windows of an Antigravity /usage payload: group by group, in
+// the CLI's order, the 5-hour window before the weekly one. With more than
+// one group, a window's panel tag names its group by its first word
+// ("Gemini 5h", "Claude 7d"), since every group has a 5h and a 7d. Buckets
+// without a remaining_fraction are dropped.
+export function normalizeAntigravityWindows(usage) {
+    const groups = (usage?.groups ?? []).filter(g => g?.buckets?.length);
+    const named = groups.length > 1;
+    const out = [];
+    groups.forEach((group, gi) => {
+        const name = agGroupName(group.name);
+        for (const b of group.buckets) {
+            const utilization = usedFromRemaining(b?.remaining_fraction);
+            if (utilization === null)
+                continue;
+            const known = AG_WINDOWS[b.window];
+            const role = known?.role ?? 'other';
+            const base = known?.label ?? (b.name || humanizeToken(b.window));
+            const tag = known?.tag ?? base;
+            out.push({
+                key: `ag:${b.id ?? `${name}:${b.window}`}`,
+                label: name ? `${name} · ${base}` : base,
+                tag: named && name ? `${name.split(/\s+/)[0]} ${tag}` : tag,
+                role,
+                utilization,
+                resetsAt: b.reset_time ?? null,
+                totalSeconds: known?.seconds ?? null,
+                apiLevel: 'ok',
+                // Every Antigravity quota applies all the time, so all of
+                // them are candidates for the 'worst' selector.
+                isActive: true,
+                order: gi * 10 + ROLE_ORDER[role],
+            });
+        }
+    });
+    out.sort((a, b) => a.order - b.order);
+    return out;
 }
 
 // The percentage to show for a share used (a window's utilization or the

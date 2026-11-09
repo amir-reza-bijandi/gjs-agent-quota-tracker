@@ -1,26 +1,26 @@
-# Claude Code Usage Monitor
+# Agent Quota Tracker
 
-<img width="260" alt="image" align="right" src="https://github.com/user-attachments/assets/190b87b7-58cb-45f7-8782-788ca027d1b8" />
+A GNOME Shell panel indicator that shows the live usage limits of your AI
+coding agents right in the top bar: your Claude subscription tier and its
+5-hour and 7-day windows, and, side by side with it, your Antigravity quota.
 
-A GNOME Shell panel indicator that shows your Claude subscription tier and live
-usage limits right in the top bar, so you can see how much of your 5-hour and
-7-day windows you have left without opening a browser.
+It reuses the sign-ins that Claude Code and the Antigravity CLI (`agy`) already
+keep, so for most people there is nothing to log in to. If you do not use
+Claude Code (or its saved sign-in has expired), the extension can sign in to
+Claude on its own from the preferences window.
 
-It reuses the OAuth token that Claude Code already stores on disk, so for most
-people there is nothing to log in to. If you do not use Claude Code (or its
-saved sign-in has expired), the extension can sign in on its own from the
-preferences window.
+A fork of [Claude Code Usage Monitor](https://github.com/dvdstelt/ClaudeCodeUsage)
+by Dennis van der Stelt, with the same design and code layout.
 
 > [!NOTE]
 > **What changed?** See the [changelog](CHANGELOG.md) for the notable changes in each release.
 
 See [install](#install) instructions
 
-<br /><br />
-
 ## Features
 
-- **Panel indicator** with a Claude icon, a usage gauge (a circular ring or a horizontal bar, your choice, or none), a percentage, an optional time-until-reset countdown, and the subscription tier as a label and/or an icon. Each element can be toggled independently.
+- **Panel indicator** with a provider icon, a usage gauge (a circular ring or a horizontal bar, your choice, or none), a percentage, an optional time-until-reset countdown, and the subscription tier as a label and/or an icon. Each element can be toggled independently.
+- **Antigravity side by side with Claude.** Switch on *Show Antigravity usage* and an Antigravity block, led by its own icon, follows the Claude profiles in the panel and the dropdown: the 5-hour and weekly quota of each of Antigravity's model groups (Gemini; Claude and GPT), exactly as the Antigravity CLI's `/usage` reports them. It is refreshed with the Claude profiles and follows every panel and UI setting they do.
 - **Multiple profiles.** If you run more than one Claude Code account on this machine (via `CLAUDE_CONFIG_DIR`, e.g. `~/.claude` and `~/.claude-work`), the extension shows every configured profile side by side in the panel and the dropdown, and refreshes them all together. Profiles are auto-detected on first run; add, rename, repoint, or remove them from the "Claude profiles" group in preferences.
 - **Dropdown** with per-window meters: the 5-hour window, the 7-day window, and any per-model 7-day windows the API reports (for example Opus and Sonnet), discovered automatically.
 - **Rate projection.** Meters, the ring, and the panel percentage are colored by your projected end-of-window usage at the current burn rate, so a fast burn turns amber or red before you actually hit the limit. When a window is on track to run out early, the caption spells it out (for example `burning fast — out in ~1h20m at this rate`); a window that is merely rising shows `on track for ~N% by reset`.
@@ -32,34 +32,32 @@ See [install](#install) instructions
 ## Requirements
 
 - GNOME Shell 46, 47, 48, 49, 50, or 51 (Ubuntu 24.04 LTS and newer).
-- A **Claude Pro or Max subscription**. The extension reports the usage limits
-  that come with a Claude Code subscription, so a free account has nothing to
-  show and cannot be connected - authorization is refused before any token is
-  issued, whether you sign in from the extension or from the CLI.
-- Then either:
+- For Claude: a **Claude Pro or Max subscription**. The extension reports the
+  usage limits that come with a Claude Code subscription, so a free account has
+  nothing to show and cannot be connected - authorization is refused before any
+  token is issued, whether you sign in from the extension or from the CLI.
+  Then either:
   - **Claude Code** signed in (the extension reads
     `~/.claude/.credentials.json`, or another profile directory you configure
     in preferences), or
   - an in-app sign-in via the preferences window (see Authentication below).
+- For Antigravity: the **Antigravity CLI** (`agy`), on `PATH` or in
+  `~/.local/bin`, signed in.
 
 ## Install
 
-### From the extensions website
-
-Install it from [extensions.gnome.org](https://extensions.gnome.org/extension/10086/claude-code-usage-monitor/) (the schema is compiled for you on install).
-
-### From source (development)
+### From source
 
 The extension source lives in `src/`. Symlink that directory into the GNOME extensions folder:
 
 ```sh
-git clone https://github.com/dvdstelt/ClaudeCodeUsage.git
-cd ClaudeCodeUsage
+git clone https://github.com/amir-reza-bijandi/gjs-agent-quota-tracker.git
+cd gjs-agent-quota-tracker
 ln -s "$PWD/src" \
-  ~/.local/share/gnome-shell/extensions/claude-usage@dvdstelt.github.io
+  ~/.local/share/gnome-shell/extensions/agent-quota-tracker@arb
 git config core.hooksPath tools/git-hooks
 ./tools/compile-schemas.sh
-gnome-extensions enable claude-usage@dvdstelt.github.io
+gnome-extensions enable agent-quota-tracker@arb
 ```
 
 The `core.hooksPath` line keeps the compiled GSettings schema in step with
@@ -72,16 +70,22 @@ schema`. Run `./tools/compile-schemas.sh` any time to fix that by hand.
 On Wayland a newly installed extension only loads after you log out and back in.
 On X11 you can reload the shell with `Alt+F2`, then `r`, then Enter.
 
+Coming from Claude Code Usage Monitor? This extension has its own UUID and
+settings, so disable that one (`gnome-extensions disable
+claude-usage@dvdstelt.github.io`) to avoid two Claude indicators; your
+preferences there are not carried over.
+
 ## Configuration
 
 Open the preferences from the dropdown (the gear button) or with:
 
 ```sh
-gnome-extensions prefs claude-usage@dvdstelt.github.io
+gnome-extensions prefs agent-quota-tracker@arb
 ```
 
-- **Panel elements** - show or hide the Claude icon, percentage, time until reset, subscription tier label, and subscription tier icon (Max 5x / 20x use the Max icon; a tier without artwork shows none), and choose the usage gauge (circle, bar, or none). *Show usage left* shows how much of each usage window and of the extra usage is left instead of how much is used, in the panel and the popup.
-- **Panel reflects** - which windows get a gauge (ring or bar, percentage, time-until-reset countdown) in the panel. Switch on any combination of the 5-hour window, the 7-day window, the per-model 7-day windows (e.g. Fable), whichever window is most constrained, and the worst active limit. With more than one switched on the gauges sit side by side, each with a short tag (5h, 7d, or the model name), separated by the window divider. The 7-day windows reset together, so they are shown as one group: no divider between them and a single time-until-reset after the last one. With none of them switched on the panel falls back to the 5-hour window; to show no gauge at all, set the gauge to "None" and turn off the usage percentage under **Panel elements**.
+- **Panel elements** - show or hide the provider icons (Claude, and Antigravity's own in front of its block), percentage, time until reset, subscription tier label, and subscription tier icon (Max 5x / 20x use the Max icon; a tier without artwork shows none), and choose the usage gauge (circle, bar, or none). *Show usage left* shows how much of each usage window and of the extra usage is left instead of how much is used, in the panel and the popup.
+- **Panel reflects** - which windows get a gauge (ring or bar, percentage, time-until-reset countdown) in the panel. Switch on any combination of the 5-hour window, the 7-day window, the per-model windows (e.g. Fable), whichever window is most constrained, and the worst active limit. They apply to the Antigravity block too, where the 5-hour and 7-day switches show that window for each model group, tagged with the group (`Gemini 5h`, `Claude 5h`). With more than one switched on the gauges sit side by side, each with a short tag (5h, 7d, or the model name), separated by the window divider. The 7-day windows reset together, so they are shown as one group: no divider between them and a single time-until-reset after the last one. With none of them switched on the panel falls back to the 5-hour window; to show no gauge at all, set the gauge to "None" and turn off the usage percentage under **Panel elements**.
+- **Antigravity** - *Show Antigravity usage* adds the Antigravity block (off by default), and the row below it says whether the Antigravity CLI was found.
 - **Panel position** - which section of the top bar the indicator sits in (left, center, or right), and where it sits among the other items there. Changes apply immediately.
 - **Shortcut to open the popup** - an optional keyboard shortcut that opens and closes the usage dropdown, the way `Super+S` opens GNOME's quick settings. Not set by default; click the row to record one, or the clear button to remove it. It needs a modifier, unless it is a function key or a media key, which type nothing on their own.
 - **Refresh interval** - how often to poll for updated usage (30 to 600 seconds; default 300).
@@ -99,7 +103,7 @@ Within a tab the same holds: one line width and spacing covers every separator l
 
 - **Model tag** - the model name (for example `Fable`) before a per-model gauge can have its own font size, weight and color. Each one follows the window tag (`5h`, `7d`) until you change it.
 - **Time until reset** - *Bold numbers* shows `1h19m` with the `1` and the `19` in bold and the `h` and the `m` regular.
-- **Dividers** - the *lead divider* sits between the leading elements (Claude icon, profile tag, subscription tier) and the gauges, and between profiles; the *window divider* sits between usage windows. For either one, a single `|` draws a thin vertical line (the lead divider's default), any other text (for example `·`) is shown as typed, and blank shows nothing. One color applies to both kinds; a line also has a width and a height, and text a font size.
+- **Dividers** - the *lead divider* sits between the leading elements (provider icon, profile tag, subscription tier) and the gauges, and between profiles; the *window divider* sits between usage windows. For either one, a single `|` draws a thin vertical line (the lead divider's default), any other text (for example `·`) is shown as typed, and blank shows nothing. One color applies to both kinds; a line also has a width and a height, and text a font size.
 
 On the Popup UI tab, **Pace marker** has the switch for the pace marker (on by default), its color (by default the popup's text color, so it reads on light and dark themes), its line width, and how far it reaches above and below the bar.
 
@@ -110,13 +114,15 @@ The extension **never asks for your password**. It uses an OAuth token in one of
 1. **Claude Code (preferred).** If `~/.claude/.credentials.json` contains a valid token, the extension uses it directly. When the token is close to expiry it is refreshed automatically with the stored refresh token and written back to the same file, so it stays valid whether or not Claude Code itself is running. Because the credentials are shared, you stay signed in to both. If those credentials have fully expired (for example you only use Claude Desktop and never sign in to the Claude Code CLI), the extension falls back to the in-app sign-in below.
 2. **In-app sign-in (fallback).** Every profile has its own **Connect** button in its row under "Claude profiles", so each profile can sign in to its own Claude account without the CLI. It runs a standard PKCE OAuth flow: Connect opens your browser, you authorize, and paste the resulting code back into the preferences window. Tokens are stored per profile in GSettings and refreshed automatically before they expire. A profile that is already signed in through Claude Code says so and needs nothing here.
 
+**Antigravity** has no sign-in of its own here, and the extension never touches its token: on every refresh it runs the Antigravity CLI's own quota command, `agy --output-format json -p /usage` (with `--log-file /dev/null`, so no log file per poll), and shows what it reports. Sign in by running `agy`. The command takes a few seconds and spends no quota.
+
 ## Development
 
 See `AGENTS.md` for the data sources and conventions in detail.
 
 ## Contributors
 
-Built by [@dvdstelt](https://github.com/dvdstelt), with thanks to everyone who has contributed:
+Agent Quota Tracker is maintained by [@amir-reza-bijandi](https://github.com/amir-reza-bijandi), on top of Claude Code Usage Monitor, built by [@dvdstelt](https://github.com/dvdstelt) with thanks to everyone who has contributed to it:
 
 - [@amalakhovsky](https://github.com/amalakhovsky) - rendering every usage window dynamically from the API's `limits[]` array (per-model windows such as Fable, the "worst active limit" panel option, structured spend), and fixing the popup bars to fill completely at 100%.
 - [@ClemDNL](https://github.com/ClemDNL) - the optional time-until-reset countdown in the panel.
@@ -133,4 +139,4 @@ Released under the GNU General Public License, version 2 or later (GPL-2.0-or-la
 
 ## Disclaimer
 
-This is an unofficial, community project. It is not affiliated with or endorsed by Anthropic. It relies on internal endpoints that may change at any time.
+This is an unofficial, community project. It is not affiliated with or endorsed by Anthropic or Google. It relies on internal endpoints that may change at any time.

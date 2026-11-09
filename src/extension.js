@@ -15,10 +15,12 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {UsageClient, UsageError, SignedOutError, defaultConfigDir} from './lib/usageClient.js';
+import {AntigravityClient} from './lib/antigravityClient.js';
 import {loadProfiles, ensureProfiles} from './lib/profiles.js';
 import {
     normalizeWindows, normalizeSpend, selectPanelWindows, groupPanelWindows, windowTag, tierIconName,
     migratePanelWindows, shownPercent, pacePercent, shownPace,
+    normalizeAntigravityWindows,
 } from './lib/usageModel.js';
 import {uiStyle, loadOverrides, boldNumbersMarkup, hoverShade, formatColor} from './lib/uiStyle.js';
 
@@ -882,15 +884,16 @@ class PanelGroup {
     }
 }
 
-// Everything specific to one Claude Code profile (one config directory / one
-// account): its own token client, panel block, and popup section. Multiple
-// instances are orchestrated by ClaudeUsageIndicator, which shares a single
-// panel icon, poll timer, and countdown across all of them.
+// Everything specific to one account: its own token client, panel block, and
+// popup section. This class is a Claude Code profile (one config directory);
+// AntigravityView below is the Antigravity account. Multiple instances are
+// orchestrated by AgentQuotaIndicator, which shares a single Claude icon, poll
+// timer, and countdown across all of them.
 class ProfileView {
     constructor(profile, settings, panelBox, sectionsBox, showChip, isFirst, allowSharedToken, path) {
         this.profile = profile;
         this._settings = settings;
-        this._client = new UsageClient({configDir: profile.configDir, settings, allowSharedToken, profileId: profile.id});
+        this._client = this._makeClient(profile, settings, allowSharedToken);
         this._lastUsage = null;
         // Outcome of this profile's last refresh ('ok' | 'error' | 'signed-out'),
         // read by the indicator for the shared "Updated …" line.
@@ -918,6 +921,18 @@ class ProfileView {
         if (!isFirst) {
             this._profileDivider = new PanelDivider('cu-panel-divider-profile');
             panelBox.add_child(this._profileDivider.root);
+        }
+        // A provider other than Claude leads its block with its own icon,
+        // since the shared Claude icon only stands for the Claude profiles.
+        const brand = this._brandIconFile();
+        this._brandIcon = null;
+        if (brand) {
+            this._brandIcon = new St.Icon({
+                gicon: Gio.icon_new_for_string(`${path}/icons/${brand}`),
+                style_class: 'cu-panel-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            this._panelBlock.add_child(this._brandIcon);
         }
         if (showChip) {
             this._chip = new St.Label({
@@ -969,7 +984,7 @@ class ProfileView {
         // list of accounts rather than one branded header over anonymous rows.
         this._header = new St.BoxLayout({style_class: 'cu-profile-header'});
         this._logo = new St.Icon({
-            gicon: Gio.icon_new_for_string(`${path}/icons/octopus.png`),
+            gicon: Gio.icon_new_for_string(`${path}/icons/${this._logoFile()}`),
             style_class: 'cu-logo',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -1005,6 +1020,24 @@ class ProfileView {
         sectionsBox.add_child(this._section);
     }
 
+    // ---- provider hooks (AntigravityView overrides these) ----
+
+    // The token client for this account.
+    _makeClient(profile, settings, allowSharedToken) {
+        return new UsageClient({configDir: profile.configDir, settings, allowSharedToken, profileId: profile.id});
+    }
+
+    // The popup header's logo, in icons/.
+    _logoFile() {
+        return 'octopus.png';
+    }
+
+    // The icon leading this block in the panel, in icons/, or null for none
+    // (a Claude profile: the shared Claude icon leads the first block).
+    _brandIconFile() {
+        return null;
+    }
+
     applyVisibility() {
         const s = this._settings;
         for (const gauge of this._gauges.values())
@@ -1019,6 +1052,11 @@ class ProfileView {
         // toggleable — some people would rather not spend the panel width.
         if (this._chip)
             this._chip.visible = s.get_boolean('show-profile-chip');
+        // A block's own provider icon follows the same switch as the
+        // shared Claude icon.
+        const icons = s.get_boolean('show-icon');
+        if (this._brandIcon)
+            this._brandIcon.visible = icons;
 
         // The lead divider: before every profile but the first, and between
         // this block's leading elements and its gauges when it has any. The
@@ -1026,7 +1064,7 @@ class ProfileView {
         // counts as a leading element of that block only.
         const lead = s.get_string('panel-lead-divider');
         const leading = !!this._chip?.visible || this._tierIcon.visible || this._panelTier.visible
-            || (this._isFirst && s.get_boolean('show-icon'));
+            || (icons && (this._isFirst || !!this._brandIcon));
         this._leadDivider.set(lead, leading);
         this._profileDivider?.set(lead, true);
     }
@@ -1047,6 +1085,8 @@ class ProfileView {
         this._setLineState(this._extra, 'extra', this._extraState);
         this._setLineState(this._error, 'error', this._errorState);
         applyInline(this._panelBlock, style, 'panel-block');
+        if (this._brandIcon)
+            applyInline(this._brandIcon, style, 'panel-icon');
         if (this._chip)
             applyInline(this._chip, style, 'panel-chip');
         applyInline(this._tierIcon, style, ['panel-icon', 'panel-tier-icon']);
@@ -1124,14 +1164,11 @@ class ProfileView {
             return;
         }
         if (profileRes.status === 'rejected')
-            logError(profileRes.reason, `claude-usage: profile fetch failed for "${this.profile.label}" (non-fatal)`);
+            logError(profileRes.reason, `agent-quota-tracker: profile fetch failed for "${this.profile.label}" (non-fatal)`);
         this._render(usageRes.value, profileRes.status === 'fulfilled' ? profileRes.value : null);
     }
 
     _render(usage, profile) {
-        this._error.visible = false;
-        this._lastUsage = usage;
-
         if (profile?.account) {
             const sub = profile.application?.name ?? 'Claude';
             const status = profile.organization?.subscription_status === 'active' ? `${sub} · active` : sub;
@@ -1149,10 +1186,19 @@ class ProfileView {
             this._setTier(plan, profile.organization?.rate_limit_tier);
         }
 
-        // Build the meter list from the normalised windows. The model prefers
-        // the API's self-describing limits[] array (which now carries per-model
-        // windows like Fable) and falls back to the legacy flat keys.
-        this._windows = normalizeWindows(usage);
+        // The model prefers the API's self-describing limits[] array (which
+        // now carries per-model windows like Fable) and falls back to the
+        // legacy flat keys.
+        this._renderUsage(usage, normalizeWindows(usage));
+    }
+
+    // Shows a successful fetch: one meter per normalised window, the extra
+    // usage from the raw payload (`usage`, kept for the countdown), then the
+    // panel.
+    _renderUsage(usage, windows) {
+        this._error.visible = false;
+        this._lastUsage = usage;
+        this._windows = windows;
         this._meterBindings = [];
         const seen = new Set();
         for (const w of this._windows) {
@@ -1422,28 +1468,30 @@ class ProfileView {
         // A 429 is transient (we polled a touch too soon). If we already have
         // usage on screen, keep showing it instead of flashing an error.
         if (e instanceof UsageError && e.status === 429 && this._lastUsage) {
-            logError(e, `claude-usage: rate limited for "${this.profile.label}", keeping last data`);
+            logError(e, `agent-quota-tracker: rate limited for "${this.profile.label}", keeping last data`);
             return;
         }
         this.lastResult = 'error';
         this.renderPanel();
-        let msg;
+        this._error.text = this._errorMessage(e);
+        this._setLineState(this._error, 'error', null);
+        this._error.visible = true;
+        logError(e, `agent-quota-tracker: refresh failed for "${this.profile.label}"`);
+    }
+
+    // The popup's line for a failed refresh.
+    _errorMessage(e) {
         if (e instanceof UsageError && e.status === 401)
-            msg = 'Session expired. Sign in via Claude Code or Settings.';
-        else if (e instanceof UsageError && e.status === 403)
+            return 'Session expired. Sign in via Claude Code or Settings.';
+        if (e instanceof UsageError && e.status === 403)
             // The API refuses to serve usage for this account: typically no
             // active subscription, even though auth itself succeeded (so the
             // profile fetch above can still show a stale plan/tier). Prefer
             // the API's own wording since it may name the actual cause.
-            msg = e.apiMessage() || 'No active Claude subscription for this account.';
-        else if (e instanceof UsageError && e.status === 429)
-            msg = 'Rate limited by Claude; will retry shortly.';
-        else
-            msg = e.message || 'Could not reach Claude';
-        this._error.text = msg;
-        this._setLineState(this._error, 'error', null);
-        this._error.visible = true;
-        logError(e, `claude-usage: refresh failed for "${this.profile.label}"`);
+            return e.apiMessage() || 'No active Claude subscription for this account.';
+        if (e instanceof UsageError && e.status === 429)
+            return 'Rate limited by Claude; will retry shortly.';
+        return e.message || 'Could not reach Claude';
     }
 
     // Clear any stale usage and show a muted "signed out" line. The account
@@ -1493,6 +1541,7 @@ class ProfileView {
             group.destroy();
         this._groups = [];
         this._gaugesBox?.destroy();
+        this._brandIcon?.destroy();
         this._chip?.destroy();
         this._tierIcon?.destroy();
         this._panelTier?.destroy();
@@ -1510,6 +1559,7 @@ class ProfileView {
         this._section?.destroy();
 
         this._gaugesBox = null;
+        this._brandIcon = null;
         this._chip = null;
         this._tierIcon = null;
         this._panelTier = null;
@@ -1530,10 +1580,52 @@ class ProfileView {
     }
 }
 
-const ClaudeUsageIndicator = GObject.registerClass(
-class ClaudeUsageIndicator extends PanelMenu.Button {
+// The Antigravity account, as the Antigravity CLI sees it: `agy /usage`
+// (lib/antigravityClient.js), whose model groups become ordinary windows
+// (normalizeAntigravityWindows), so the panel block and the popup section
+// work exactly like a Claude profile's. It leads its block with the
+// Antigravity icon, never carries a chip, and has no tier: /usage names none.
+class AntigravityView extends ProfileView {
+    _makeClient() {
+        return new AntigravityClient();
+    }
+
+    _logoFile() {
+        return 'antigravity.svg';
+    }
+
+    _brandIconFile() {
+        return 'antigravity.svg';
+    }
+
+    // Nothing on disk to read: the CLI is only asked on a refresh.
+    async applyTierFromDisk() {}
+
+    async refresh(cancellable) {
+        let usage;
+        try {
+            usage = await this._client.fetchUsage(cancellable);
+        } catch (e) {
+            if (!cancellable.is_cancelled())
+                this._renderError(e);
+            return;
+        }
+        if (cancellable.is_cancelled())
+            return;
+        // Clears a "Signed out" left by an earlier refresh.
+        this._subtitle.text = '';
+        this._renderUsage(usage, normalizeAntigravityWindows(usage));
+    }
+
+    _errorMessage(e) {
+        return e.message || 'Could not run agy';
+    }
+}
+
+const AgentQuotaIndicator = GObject.registerClass(
+class AgentQuotaIndicator extends PanelMenu.Button {
     _init(path, settings, openPreferences) {
-        super._init(0.5, 'Claude Code Usage Monitor');
+        super._init(0.5, 'Agent Quota Tracker');
 
         this._path = path;
         this._settings = settings;
@@ -1590,8 +1682,10 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             'changed::poll-seconds', () => this._startTimer(),
             // Signing in (or out) from prefs changes the token source; refetch.
             'changed::access-token', () => this._refresh(true),
-            // Profiles were added/removed/renamed/repointed in prefs.
+            // Profiles were added/removed/renamed/repointed in prefs, or the
+            // Antigravity block was switched on or off.
             'changed::profiles', () => this._rebuildFromSettings(),
+            'changed::show-antigravity', () => this._rebuildFromSettings(),
             this);
 
         this._applyVisibility();
@@ -1626,6 +1720,12 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             return new ProfileView(profile, this._settings, this._panelBox,
                 this._sectionsBox, showChip, i === 0, allowSharedToken, this._path);
         });
+        // Antigravity sits after the Claude profiles, side by side with them.
+        if (this._settings.get_boolean('show-antigravity')) {
+            this._profileViews.push(new AntigravityView(
+                {id: 'antigravity', label: 'Antigravity'}, this._settings, this._panelBox,
+                this._sectionsBox, false, this._profileViews.length === 0, false, this._path));
+        }
         this._applyVisibility();
         this._applyStyle();
         for (const view of this._profileViews)
@@ -1725,7 +1825,9 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 
     _applyVisibility() {
-        this._panelIcon.visible = this._settings.get_boolean('show-icon');
+        // The Claude icon leads the Claude profiles, so it goes with them.
+        this._panelIcon.visible = this._settings.get_boolean('show-icon')
+            && this._profileViews.some(view => !(view instanceof AntigravityView));
         for (const view of this._profileViews)
             view.applyVisibility();
         if (this._refreshBtn)
@@ -1877,10 +1979,10 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 });
 
-export default class ClaudeUsageExtension extends Extension {
+export default class AgentQuotaExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
-        this._indicator = new ClaudeUsageIndicator(
+        this._indicator = new AgentQuotaIndicator(
             this.path, this._settings, () => this.openPreferences());
         // Watch both placement keys so a move applies immediately, with no
         // reload and no logging out.

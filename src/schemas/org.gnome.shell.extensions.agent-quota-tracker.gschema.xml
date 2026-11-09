@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.claude-usage"
-          path="/org/gnome/shell/extensions/claude-usage/">
+  <schema id="org.gnome.shell.extensions.agent-quota-tracker"
+          path="/org/gnome/shell/extensions/agent-quota-tracker/">
     <key name="show-icon" type="b">
       <default>true</default>
-      <summary>Show the Claude icon</summary>
-      <description>Display the Claude logo in the panel.</description>
+      <summary>Show the provider icons</summary>
+      <description>Display the Claude logo in front of the Claude profiles, and the Antigravity logo in front of the Antigravity block, in the panel.</description>
+    </key>
+    <key name="show-antigravity" type="b">
+      <default>false</default>
+      <summary>Show Antigravity usage</summary>
+      <description>Add a block for the Antigravity account after the Claude profiles, in the panel and the popup: the 5-hour and weekly quota of each of its model groups (Gemini; Claude and GPT), from the Antigravity CLI's own "agy -p /usage", run on every refresh. Needs agy installed and signed in.</description>
     </key>
     <key name="panel-gauge" type="s">
       <choices>
@@ -61,7 +66,7 @@
     <key name="panel-windows" type="as">
       <default>['five-hour']</default>
       <summary>Panel usage windows</summary>
-      <description>Which usage windows the panel shows, one gauge (ring/bar, percentage) per window, tagged "5h"/"7d"/model name when more than one is shown. Accepted selectors: five-hour (the 5-hour window), seven-day (the 7-day all-models window), scoped (every per-model 7-day window, e.g. Fable), max (whichever window has the highest utilization), worst (the worst active limit by severity — surfaces a maxed-out per-model window). Unknown selectors are ignored and a window matched by several selectors is shown once. Empty falls back to the first window.</description>
+      <description>Which usage windows the panel shows, one gauge (ring/bar, percentage) per window, tagged "5h"/"7d"/model name when more than one is shown. Accepted selectors: five-hour (the 5-hour window), seven-day (the 7-day all-models window), scoped (every per-model 7-day window, e.g. Fable), max (whichever window has the highest utilization), worst (the worst active limit by severity — surfaces a maxed-out per-model window). They apply to every block alike: for Antigravity, five-hour and seven-day pick the 5-hour and weekly window of each model group, tagged with the group ("Gemini 5h"). Unknown selectors are ignored and a window matched by several selectors is shown once. Empty falls back to the first window.</description>
     </key>
     <key name="panel-divider" type="s">
       <default>' '</default>

@@ -1,15 +1,38 @@
 # Changelog
 
-All notable changes to Claude Code Usage Monitor are documented here.
+All notable changes to Agent Quota Tracker are documented here. Releases up to
+1.5.1 are those of Claude Code Usage Monitor, which this extension is a fork of.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 2.0.0 - 2026-11-09
 
-Thanks to @Power-tile for the idea of the pace marker (#26).
+The first release as Agent Quota Tracker. Thanks to @Power-tile for the idea of the pace marker (#26).
 
 ### Added
+- Antigravity usage, side by side with Claude. Switch on "Show Antigravity
+  usage" under the new "Antigravity" group in preferences, and an Antigravity
+  block, led by its own icon, follows the Claude profiles in the panel and the
+  dropdown: the 5-hour and weekly quota of each of Antigravity's model groups
+  (Gemini; Claude and GPT), tagged with the group in the panel ("Gemini 5h").
+  It runs the Antigravity CLI's own `agy -p /usage` on every refresh, so
+  there is nothing to log in to and no token is touched. Off by default.
+- `gjs -m tools/poll.js --antigravity` checks the Antigravity quota against
+  the live API.
+
+### Changed
+- Renamed to Agent Quota Tracker, with its own UUID
+  (`agent-quota-tracker@arb`) and settings schema
+  (`org.gnome.shell.extensions.agent-quota-tracker`). Settings of Claude Code
+  Usage Monitor are not carried over.
+- The "Claude icon" panel element is now "Provider icons": it shows or hides
+  the Antigravity icon too, and the Claude icon is only shown while a Claude
+  profile is configured.
+- The preferences footer credits Claude Code Usage Monitor, and links to this
+  fork for bug reports.
+
+### Added in Claude Code Usage Monitor since 1.5.1
 - A "Show usage left" option: the panel and the popup show how much of each
   usage window and of the extra usage is left instead of how much is used,
   and the gauges fill with what is left. Their colors still follow the usage,

@@ -1,10 +1,15 @@
-# Claude Code Usage Monitor (GNOME Shell extension)
+# Agent Quota Tracker (GNOME Shell extension)
 
-A GNOME Shell panel indicator that shows your Claude subscription tier and live
-usage limits (5-hour and 7-day windows). It reuses the OAuth token that Claude
-Code already stores on disk, so there is usually no separate login. Each profile
-can also sign in on its own, from a PKCE flow in its row in prefs, for accounts
-that never use the CLI.
+A GNOME Shell panel indicator that shows the usage limits of AI coding agents:
+your Claude subscription tier and live usage limits (5-hour and 7-day
+windows), and optionally, side by side, your Antigravity quota. It reuses the
+OAuth token that Claude Code already stores on disk, so there is usually no
+separate login. Each profile can also sign in on its own, from a PKCE flow in
+its row in prefs, for accounts that never use the CLI. Antigravity has no
+sign-in of its own: it runs the Antigravity CLI's `/usage` command.
+
+A fork of Claude Code Usage Monitor (github.com/dvdstelt/ClaudeCodeUsage);
+the `cu-` style classes are kept from it.
 
 ## Layout
 
@@ -13,11 +18,17 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
 
 - `src/extension.js` — panel indicator + dropdown UI (ESM, GNOME Shell 45+
   style). `ProfileView` holds everything specific to one Claude Code profile
-  (its `UsageClient`, panel block, and popup section); `ClaudeUsageIndicator`
-  owns one `ProfileView` per configured profile, plus the shared panel icon,
-  poll timer, and countdown. The panel shows a Claude icon once, then one
-  block per profile: `[profile divider] [chip] [tier icon] [tier label]
-  [lead divider]`, then `PanelGroup`s, each `[window divider] gauges…
+  (its `UsageClient`, panel block, and popup section); `AntigravityView`
+  extends it for the Antigravity account, overriding only the provider hooks
+  (`_makeClient`, `_logoFile`, `_brandIconFile`, `_errorMessage`) plus
+  `refresh()` / `applyTierFromDisk()`, and feeds the shared `_renderUsage()`
+  with `normalizeAntigravityWindows()`. `AgentQuotaIndicator` owns one
+  `ProfileView` per configured profile, then one `AntigravityView` when
+  `show-antigravity` is on, plus the shared panel icon, poll timer, and
+  countdown. The panel shows a Claude icon once (only while there is a Claude
+  profile), then one block per profile: `[profile divider] [brand icon]
+  [chip] [tier icon] [tier label] [lead divider]`, then `PanelGroup`s, each
+  `[window divider] gauges…
   [reset countdown]`. There is one `PanelGauge` (tag, ring/bar, percentage)
   per usage window selected by `panel-windows`, keyed by window like the
   popup meters so gauges are reused across polls and move between groups.
@@ -92,7 +103,7 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   carries its own PKCE sign-in (`_addSignInRows`): a status line that reads
   "Using Claude Code", "Connected", or "Not connected", plus Connect, a field
   for the pasted code, and Disconnect.
-- `src/schemas/` — GSettings schema (`org.gnome.shell.extensions.claude-usage`).
+- `src/schemas/` — GSettings schema (`org.gnome.shell.extensions.agent-quota-tracker`).
   Keys: `show-icon`/`show-percentage`/`show-tier` (label)/`show-tier-icon`/`show-reset` (bool),
   `show-remaining` (bool, show 100% minus usage, for the windows and the
   extra usage, in the panel and popup, via `shownPercent()` in usageModel.js;
@@ -119,7 +130,15 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   `profiles-initialized` (bool, set once auto-detection has seeded `profiles`
   so a deliberately-emptied list isn't re-seeded), and the in-app sign-in
   tokens `access-token`/`refresh-token` (string) + `expires-at` (int64 ms).
+  `show-antigravity` (bool, the Antigravity block; default off).
   Recompile after edits: `glib-compile-schemas src/schemas/`.
+- `src/lib/antigravityClient.js` — pure GI module for Antigravity: runs
+  `agy --log-file /dev/null --output-format json -p /usage` through an async
+  `Gio.Subprocess` (killed on cancel or after 60 s) and returns its
+  `command.data`. The CLI owns the sign-in and token refresh; the extension
+  holds no Antigravity credentials. No agy, or a not-signed-in answer,
+  resolves to a `SignedOutError`. Exports `findAgy()` (PATH, then
+  `~/.local/bin/agy`) for prefs.
 - `src/lib/usageClient.js` — pure GI module: resolves a token for a given
   `configDir` (that profile's on-disk credentials first, the extension's own
   GSettings tokens second), calls the usage and profile endpoints, refreshes the
@@ -196,16 +215,17 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   it has its own, and names it in its reset tooltip (`followed()`). Imports Gtk, so it is for prefs.js only:
   never import it from extension.js. No shell imports, so
   `tools/test-uiStylePage.js` drives the real page under plain `gjs`.
-- `src/lib/oauth.js` — shared OAuth/API constants (client id, endpoints,
-  scopes, headers) and text codecs, imported by both `usageClient.js` and
-  `prefs.js` so the values are defined once. No shell imports.
+- `src/lib/oauth.js` — shared OAuth/API constants (client ids, endpoints,
+  scopes, headers, for Claude and Antigravity) and text codecs, imported by
+  `usageClient.js`, `antigravityClient.js` and `prefs.js` so the values are
+  defined once. No shell imports.
 - `src/lib/usageModel.js` — pure data-shaping: turns the usage payload into the
   ordered list of windows the popup renders (`normalizeWindows`, preferring the
   self-describing `limits[]` array and falling back to the legacy flat keys),
   the extra-usage money block (`normalizeSpend`), and the panel's window
   selection (`selectPanelWindows` over the `panel-windows` selectors,
   `windowTag` for the short panel tags, `migratePanelWindows` for the
-  `panel-window` upgrade), and where the popup's pace marker goes (`pacePercent`, the share of a window that has passed, and `shownPace` for the bar as shown). No GI or shell imports, so it is unit-testable
+  `panel-window` upgrade), and where the popup's pace marker goes (`pacePercent`, the share of a window that has passed, and `shownPace` for the bar as shown). The Antigravity `/usage` data becomes the same window shape in `normalizeAntigravityWindows` (each group's `5h`/`weekly` buckets take the session/weekly roles, ordered group by group, tagged with the group's first word, e.g. "Gemini 5h", when there are several groups); `five-hour`/`seven-day` therefore pick every window of their role. No GI or shell imports, so it is unit-testable
   under plain `node` (see `tools/test-usageModel.mjs`).
 - `src/stylesheet.css` — `cu-*` classes for the indicator and popup, and the
   defaults of every UI setting. Values shared between classes are declared
@@ -213,7 +233,7 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   popup's secondary text and separator lines); keep it that way, since one
   setting drives all of them. Only classes that extension.js uses.
 - `src/icons/` — panel icon (`claude-spark.svg`), popup logo
-  (`octopus.png`), and the recolorable tier icons
+  (`octopus.png`), the Antigravity icon for both (`antigravity.svg`), and the recolorable tier icons
   (`tier-<name>-symbolic.svg`, one per name in `TIER_ICONS`). `assets/` holds
   repo-only originals that stay out of the bundle (`assets/tier-icons/`).
 - `build.sh` — runs `gnome-extensions pack src` into `dist/`, including `lib`,
@@ -223,8 +243,8 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   increments the integer `version` before packing.
 - `tools/poll.js` — standalone validator that hits the live API and prints the
   normalised windows + spend, run from the repo root: `gjs -m tools/poll.js`
-  (defaults to `~/.claude`) or `gjs -m tools/poll.js ~/.claude-work` to check a
-  specific profile.
+  (defaults to `~/.claude`), `gjs -m tools/poll.js ~/.claude-work` to check a
+  specific profile, or `gjs -m tools/poll.js --antigravity` for Antigravity.
 - `tools/test-usageModel.mjs` — pure-`node` unit tests for `usageModel.js`
   (no network, no GI): `node tools/test-usageModel.mjs`.
 - `tools/test-uiStyle.mjs` — the same for `uiStyle.js`, including the check
@@ -257,6 +277,13 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   `anthropic-version: 2023-06-01`.
 - Refresh: `POST https://platform.claude.com/v1/oauth/token` with
   `grant_type=refresh_token` and the public Claude Code `client_id`.
+
+- Antigravity: `agy --output-format json -p /usage` prints
+  `{status: 'SUCCESS', command: {name: 'usage', data: {groups: [{name,
+  description, buckets: [{id, name, window: '5h'|'weekly',
+  remaining_fraction, reset_time}]}]}}}`. It spends no quota (its `usage`
+  block is all zeros) and takes a few seconds. `--log-file /dev/null` stops
+  it writing a log file per run to `~/.gemini/antigravity-cli/log`.
 
 These are undocumented internal endpoints and may change without notice.
 
@@ -321,10 +348,10 @@ Helper classes that own widgets (`Meter`, `PanelBar`) therefore each expose a
 Symlink `src/` (not the repo root) into the extensions folder:
 
 ```sh
-ln -s "$PWD/src" ~/.local/share/gnome-shell/extensions/claude-usage@dvdstelt.github.io
+ln -s "$PWD/src" ~/.local/share/gnome-shell/extensions/agent-quota-tracker@arb
 git config core.hooksPath tools/git-hooks
 ./tools/compile-schemas.sh
-gnome-extensions enable claude-usage@dvdstelt.github.io
+gnome-extensions enable agent-quota-tracker@arb
 ```
 
 On Wayland a new extension only loads after logging out and back in.

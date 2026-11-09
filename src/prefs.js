@@ -8,6 +8,7 @@ import Soup from 'gi://Soup';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {claudeCodeCredentialsAvailable} from './lib/usageClient.js';
+import {findAgy} from './lib/antigravityClient.js';
 import {
     AUTHORIZE_URL, TOKEN_URL, CLIENT_ID, REDIRECT_URI, OAUTH_SCOPES,
     DEFAULT_EXPIRES_IN, encoder, decoder,
@@ -18,7 +19,7 @@ import {PANEL_SELECTORS, migratePanelWindows} from './lib/usageModel.js';
 import {UI_PAGES} from './lib/uiStyle.js';
 import {buildUiStylePage} from './lib/uiStylePage.js';
 
-const KOFI_URL = 'https://ko-fi.com/dvdstelt';
+const UPSTREAM_URL = 'https://github.com/dvdstelt/ClaudeCodeUsage';
 
 // Keys that type nothing, so binding them without a modifier steals no input:
 // the function keys (F1-F35, contiguous) and the XF86 media/extra keys, which
@@ -75,7 +76,7 @@ async function pickFolder(window, initialPath) {
     }
 }
 
-export default class ClaudeUsagePreferences extends ExtensionPreferences {
+export default class AgentQuotaPreferences extends ExtensionPreferences {
     async fillPreferencesWindow(window) {
         const settings = this.getSettings();
         // Carry a pre-1.5 single "panel reflects" choice into panel-windows
@@ -101,7 +102,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         page.add(elements);
 
         const toggles = [
-            ['show-icon', 'Claude icon'],
+            ['show-icon', 'Provider icons'],
             ['show-percentage', 'Usage percentage'],
             ['show-tier', 'Subscription tier label'],
             ['show-tier-icon', 'Subscription tier icon'],
@@ -209,6 +210,8 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         // ---- profiles (one per Claude Code account / config directory) ----
         await this._addProfilesGroup(page, settings, window);
 
+        this._addAntigravityGroup(page, settings);
+
         // Sign-in is no longer a single global group: each profile row carries
         // its own Connect/Disconnect, since every profile signs in to its own
         // Claude account.
@@ -231,8 +234,8 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         page.add(group);
 
         const rows = [
-            ['five-hour', '5-hour window', ''],
-            ['seven-day', '7-day window', 'All models.'],
+            ['five-hour', '5-hour window', 'For Antigravity, one per model group.'],
+            ['seven-day', '7-day window', 'All models; for Antigravity, one per model group.'],
             ['scoped', 'Per-model 7-day windows', 'Every model-specific limit, e.g. Fable.'],
             ['max', 'Most constrained', 'Whichever window has the highest usage.'],
             ['worst', 'Worst active limit', 'Highest severity among the active limits; surfaces a maxed-out per-model window.'],
@@ -259,6 +262,35 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                 row.active = on.has(key);
             syncing = false;
         });
+    }
+
+    // Adds the "Antigravity" group: the switch that adds the Antigravity
+    // block, and where the Antigravity CLI is (the block runs its /usage, so
+    // it has no sign-in of its own here).
+    _addAntigravityGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: 'Antigravity',
+            description: 'Show your Antigravity quota side by side with Claude: the 5-hour ' +
+                'and weekly limits of each model group (Gemini; Claude and GPT), as reported ' +
+                'by the Antigravity CLI\u2019s /usage. Needs agy installed and signed in.',
+        });
+        page.add(group);
+
+        const showRow = new Adw.SwitchRow({title: 'Show Antigravity usage'});
+        group.add(showRow);
+        settings.bind('show-antigravity', showRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const agy = findAgy();
+        const cliRow = new Adw.ActionRow({
+            title: 'Antigravity CLI',
+            subtitle: agy ?? 'agy was not found on PATH or in ~/.local/bin.',
+        });
+        cliRow.add_suffix(new Gtk.Label({
+            valign: Gtk.Align.CENTER,
+            label: agy ? 'Found' : 'Not found',
+            css_classes: agy ? ['success'] : ['dim-label'],
+        }));
+        group.add(cliRow);
     }
 
     // Adds a "Claude profiles" group: one expandable row per configured
@@ -482,7 +514,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         const footer = new Adw.PreferencesGroup();
         page.add(footer);
 
-        const url = this.metadata.url ?? 'https://github.com/dvdstelt/ClaudeCodeUsage';
+        const url = this.metadata.url ?? 'https://github.com/amir-reza-bijandi/gjs-agent-quota-tracker';
         const issuesUrl = `${url}/issues/new`;
 
         const buttons = new Gtk.Box({
@@ -490,7 +522,6 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             margin_bottom: 16,
             halign: Gtk.Align.CENTER,
         });
-        buttons.append(this._buildLinkButton('♥ Buy me a coffee', KOFI_URL));
         buttons.append(this._buildLinkButton('Report a bug', issuesUrl));
         buttons.append(this._buildLinkButton('Request a feature', issuesUrl));
         footer.add(buttons);
@@ -506,7 +537,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         }));
 
         footer.add(new Gtk.Label({
-            label: 'Created by <b>Dennis van der Stelt</b>',
+            label: `Based on <a href="${UPSTREAM_URL}">Claude Code Usage Monitor</a> by <b>Dennis van der Stelt</b>`,
             use_markup: true,
             margin_bottom: 4,
         }));
@@ -514,7 +545,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         const version = this.metadata['version-name'] ?? String(this.metadata.version ?? '');
         if (version) {
             footer.add(new Gtk.Label({
-                label: `· Claude Code Usage Monitor v${version} ·`,
+                label: `· Agent Quota Tracker v${version} ·`,
                 css_classes: ['dim-label'],
             }));
         }
@@ -662,7 +693,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                     const bytes = sess.send_and_read_finish(result);
                     const text = bytes ? decoder.decode(bytes.get_data()) : '';
                     if (message.status_code !== 200) {
-                        console.error(`Claude Code Usage Monitor prefs: token exchange HTTP ${message.status_code}: ${text}`);
+                        console.error(`Agent Quota Tracker prefs: token exchange HTTP ${message.status_code}: ${text}`);
                         setStatus(`Error ${message.status_code}`, false);
                         return;
                     }
@@ -683,7 +714,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                     codeVerifier = null;
                     oauthState = null;
                 } catch (e) {
-                    console.error(`Claude Code Usage Monitor prefs: token exchange failed: ${e.message}`);
+                    console.error(`Agent Quota Tracker prefs: token exchange failed: ${e.message}`);
                     setStatus('Exchange failed', false);
                 } finally {
                     connectButton.set_sensitive(true);

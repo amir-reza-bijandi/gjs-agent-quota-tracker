@@ -7,6 +7,7 @@ import {
     normalizeWindows, normalizeSpend, apiSeverityLevel, limitLabel, limitKey,
     selectPanelWindows, windowTag, migratePanelWindows, groupPanelWindows, tierIconName,
     shownPercent, pacePercent, shownPace, PANEL_SELECTORS, TIER_ICONS,
+    normalizeAntigravityWindows,
 } from '../src/lib/usageModel.js';
 
 let passed = 0;
@@ -368,6 +369,62 @@ test('shownPace: the line is where the fill would be, with usage left shown too'
     // of it when the bar shows the share left.
     assert.ok(shownPercent(60, false) > shownPace(40, false));
     assert.ok(shownPercent(60, true) < shownPace(40, true));
+});
+
+// --- Antigravity (`agy --output-format json -p /usage`, command.data) ---
+const agUsage = {
+    groups: [
+        {
+            name: 'Gemini Models',
+            buckets: [
+                {id: 'gemini-weekly', window: 'weekly', remaining_fraction: 0.5215639472007751, reset_time: '2026-11-14T07:32:24Z'},
+                {id: 'gemini-5h', window: '5h', remaining_fraction: 0.5803285837173462, reset_time: '2026-11-09T08:33:17Z'},
+            ],
+        },
+        {
+            name: 'Claude and GPT models',
+            buckets: [
+                {id: '3p-weekly', window: 'weekly', remaining_fraction: 1, reset_time: '2026-11-16T06:05:26Z'},
+                {id: '3p-5h', window: '5h', remaining_fraction: 0.1, reset_time: '2026-11-09T11:05:26Z'},
+                {id: '3p-none', window: '5h', reset_time: '2026-11-09T11:05:26Z'},
+            ],
+        },
+    ],
+};
+
+test('normalizeAntigravityWindows: the share left becomes usage, group by group, 5-hour first', () => {
+    const ws = normalizeAntigravityWindows(agUsage);
+    assert.deepEqual(ws.map(w => w.key), ['ag:gemini-5h', 'ag:gemini-weekly', 'ag:3p-5h', 'ag:3p-weekly']);
+    assert.deepEqual(ws.map(w => w.label),
+        ['Gemini · 5-hour', 'Gemini · 7-day', 'Claude & GPT · 5-hour', 'Claude & GPT · 7-day']);
+    assert.deepEqual(ws.map(w => w.role), ['session', 'weekly', 'session', 'weekly']);
+    assert.equal(Math.round(ws[0].utilization), 42);
+    assert.ok(Math.abs(ws[2].utilization - 90) < 1e-9);
+    assert.equal(ws[3].utilization, 0);
+    assert.equal(ws[0].totalSeconds, 5 * 3600);
+    assert.equal(ws[1].totalSeconds, 7 * 24 * 3600);
+});
+
+test('normalizeAntigravityWindows: tags name the group only when there are several', () => {
+    assert.deepEqual(normalizeAntigravityWindows(agUsage).map(windowTag), ['Gemini 5h', 'Gemini 7d', 'Claude 5h', 'Claude 7d']);
+    const single = normalizeAntigravityWindows({groups: [agUsage.groups[0]]});
+    assert.deepEqual(single.map(windowTag), ['5h', '7d']);
+});
+
+test('selectPanelWindows: five-hour and seven-day pick one window per Antigravity group', () => {
+    const ws = normalizeAntigravityWindows(agUsage);
+    assert.deepEqual(selectPanelWindows(ws, ['five-hour']).map(w => w.key), ['ag:gemini-5h', 'ag:3p-5h']);
+    assert.deepEqual(selectPanelWindows(ws, ['seven-day']).map(w => w.key), ['ag:gemini-weekly', 'ag:3p-weekly']);
+    // The two weekly windows reset days apart, so each keeps its countdown.
+    assert.equal(groupPanelWindows(selectPanelWindows(ws, ['seven-day'])).length, 2);
+});
+
+test('normalizeAntigravityWindows: missing payloads give no windows, and usage stays within 0-100', () => {
+    assert.deepEqual(normalizeAntigravityWindows(null), []);
+    assert.deepEqual(normalizeAntigravityWindows({groups: [{name: 'Empty', buckets: []}]}), []);
+    const [w] = normalizeAntigravityWindows({groups: [{buckets: [{id: 'x', window: '5h', remaining_fraction: 1.2}]}]});
+    assert.equal(w.utilization, 0);
+    assert.equal(w.label, '5-hour');
 });
 
 console.log(`\n${passed} tests passed`);

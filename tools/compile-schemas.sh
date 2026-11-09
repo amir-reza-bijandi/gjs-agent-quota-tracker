@@ -7,7 +7,7 @@
 # key therefore leaves the shell reading a stale compiled schema, and the
 # extension dies at startup with:
 #
-#   GSettings key <name> not found in schema org.gnome.shell.extensions.claude-usage
+#   GSettings key <name> not found in schema org.gnome.shell.extensions.agent-quota-tracker
 #
 # Run this after any checkout that touches the schema (the git hooks in
 # tools/git-hooks do it automatically). Harmless to run at any time.

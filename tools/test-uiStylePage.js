@@ -34,7 +34,7 @@ const settle = () => {
 const schemaDir = GLib.build_filenamev([GLib.get_current_dir(), 'src', 'schemas']);
 const source = Gio.SettingsSchemaSource.new_from_directory(schemaDir, Gio.SettingsSchemaSource.get_default(), false);
 const settings = new Gio.Settings({
-    settings_schema: source.lookup('org.gnome.shell.extensions.claude-usage', false),
+    settings_schema: source.lookup('org.gnome.shell.extensions.agent-quota-tracker', false),
     backend: Gio.memory_settings_backend_new(),
 });
 const stored = () => JSON.parse(settings.get_string(UI_STYLE_KEY));
