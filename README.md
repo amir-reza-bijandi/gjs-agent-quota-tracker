@@ -103,7 +103,7 @@ Within a tab the same holds: one line width and spacing covers every separator l
 
 - **Model tag** - the model name (for example `Fable`) before a per-model gauge can have its own font size, weight and color. Each one follows the window tag (`5h`, `7d`) until you change it.
 - **Time until reset** - *Bold numbers* shows `1h19m` with the `1` and the `19` in bold and the `h` and the `m` regular.
-- **Dividers** - the *lead divider* sits between the leading elements (provider icon, profile tag, subscription tier) and the gauges, and between profiles; the *window divider* sits between usage windows. For either one, a single `|` draws a thin vertical line (the lead divider's default), any other text (for example `·`) is shown as typed, and blank shows nothing. One color applies to both kinds; a line also has a width and a height, and text a font size.
+- **Dividers** - the *lead divider* sits between the leading elements (provider icon, profile tag, subscription tier) and the gauges; the *provider divider* sits between profiles and providers (for example between Claude and Antigravity), `·` by default so it reads apart from the lead divider; the *window divider* sits between usage windows. For each one, a single `|` draws a thin vertical line (the lead divider's default), any other text (for example `·`) is shown as typed, and blank shows nothing. One color applies to all of them; a line also has a width and a height, and text a font size.
 
 On the Popup UI tab, **Pace marker** has the switch for the pace marker (on by default), its color (by default the popup's text color, so it reads on light and dark themes), its line width, and how far it reaches above and below the bar.
 

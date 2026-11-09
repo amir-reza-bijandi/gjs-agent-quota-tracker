@@ -256,7 +256,8 @@ export const UI_STYLE_GROUPS = [
         description: 'A single | draws a thin vertical line, any other text is shown as typed, and blank shows ' +
             'no divider. The color applies to both kinds; a line has a width and a height, text has a font size.',
         settings: [
-            {key: 'panel-lead-divider', title: 'Lead divider (after the icon and tier, and between profiles)'},
+            {key: 'panel-lead-divider', title: 'Lead divider (after the icon and tier)'},
+            {key: 'panel-profile-divider', title: 'Provider divider (between profiles and providers)'},
             {key: 'panel-divider', title: 'Window divider (between usage windows)'},
         ],
         props: [

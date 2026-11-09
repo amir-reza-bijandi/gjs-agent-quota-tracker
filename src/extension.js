@@ -597,9 +597,10 @@ function applyInline(actor, style, cls, state = null) {
     setIfChanged(actor, 'style', style.inline(cls, state));
 }
 
-// A divider in the panel, from one of the two divider settings: the lead
-// divider (panel-lead-divider: after the Claude icon / tier, and between
-// profiles) or the window divider (panel-divider: between groups of gauges).
+// A divider in the panel, from one of the three divider settings: the lead
+// divider (panel-lead-divider: after the Claude icon / tier), the provider
+// divider (panel-profile-divider: between profiles) or the window divider
+// (panel-divider: between groups of gauges).
 // Blank or whitespace-only text shows nothing, so the box spacing alone makes
 // the gap; exactly "|" draws a crisp 1px line rather than the font's glyph;
 // any other text is shown as typed. Owns its actors like PanelBar.
@@ -913,9 +914,10 @@ class ProfileView {
 
         // ---- panel block ----
         // [profile divider] [chip] [tier icon] [tier label] [lead divider]
-        // [groups of gauges]. Both dividers here draw the lead-divider text:
-        // one between this profile and the previous one, one between this
-        // block's leading elements and its gauges.
+        // [groups of gauges]. The profile divider (panel-profile-divider)
+        // sits between this profile and the previous one; the lead divider
+        // (panel-lead-divider) between this block's leading elements and its
+        // gauges.
         this._panelBlock = new St.BoxLayout({style_class: 'cu-panel-block'});
         this._profileDivider = null;
         if (!isFirst) {
@@ -1066,7 +1068,7 @@ class ProfileView {
         const leading = !!this._chip?.visible || this._tierIcon.visible || this._panelTier.visible
             || (icons && (this._isFirst || !!this._brandIcon));
         this._leadDivider.set(lead, leading);
-        this._profileDivider?.set(lead, true);
+        this._profileDivider?.set(s.get_string('panel-profile-divider'), true);
     }
 
     // Applies the UI settings to the panel block and the popup section, and
@@ -1673,6 +1675,7 @@ class AgentQuotaIndicator extends PanelMenu.Button {
             'changed::show-tier', () => this._applyVisibility(),
             'changed::show-tier-icon', () => this._applyVisibility(),
             'changed::panel-lead-divider', () => this._applyVisibility(),
+            'changed::panel-profile-divider', () => this._applyVisibility(),
             'changed::show-reset', () => this._applyVisibility(),
             'changed::show-profile-chip', () => this._applyVisibility(),
             'changed::panel-windows', () => this._renderAllPanels(),

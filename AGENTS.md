@@ -46,10 +46,11 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
     per-model windows whose resets are within 5 minutes (or unknown) in one
     group, whose `resetsAt` is the first known reset. The window divider
     sits between groups only, and the countdown is the group's, shown once.
-  - Dividers: `PanelDivider` draws both settings. `panel-divider` (window
-    divider) goes before every group but the first; `panel-lead-divider`
-    goes between a block's leading elements (chip, tier icon/label, and for
-    the first block the shared Claude icon) and its gauges, and before every
+  - Dividers: `PanelDivider` draws all three settings. `panel-divider`
+    (window divider) goes before every group but the first;
+    `panel-lead-divider` goes between a block's leading elements (chip, tier
+    icon/label, and for the first block the shared Claude icon) and its
+    gauges; `panel-profile-divider` (provider divider) goes before every
     profile block but the first (`ProfileView.applyVisibility()`). Blank
     shows nothing, exactly `|` draws a 1px line, other text is a label.
   - `renderPanel()` runs after every poll, preference change and countdown
@@ -113,9 +114,10 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   one panel gauge per matched window, merged and shown in role order),
   `panel-window` (deprecated single-valued predecessor, read once by
   `migratePanelWindows()` to seed `panel-windows`), `panel-divider` (window
-  divider: string drawn between gauge groups; default `' '`) and
-  `panel-lead-divider` (lead divider: after the leading elements and between
-  profiles; default `'|'`) — for both, a blank/whitespace value shows
+  divider: string drawn between gauge groups; default `' '`),
+  `panel-lead-divider` (lead divider: after the leading elements; default
+  `'|'`) and `panel-profile-divider` (provider divider: between profile
+  blocks; default `'·'`) — for all three, a blank/whitespace value shows
   nothing and exactly `|` draws a 1px line,
   `poll-seconds` (30-600),
   `panel-position` (`left`|`center`|`right`) + `panel-index` (0-20, where the
@@ -190,7 +192,7 @@ the LICENSE, `build.sh`, `tools/`) is repo tooling that stays out of the bundle.
   value it follows must have the same state targets (a test checks it). A
   `def: null` without `inherits` means "the panel's own" (or, on the popup tab, "the popup's own") and is for the
   percentage's color and font size and the pace marker's color only. A group may also list `settings`, plain string
-  GSettings keys (`panel-lead-divider`, `panel-divider`) that the page
+  GSettings keys (`panel-lead-divider`, `panel-profile-divider`, `panel-divider`) that the page
   edits, resets and counts too (`textSettingChanged`). "Reset all" is per
   tab: `changedCount(settings, page)` and `resetPage(settings, page)`.
   stylesheet.css remains the source of the

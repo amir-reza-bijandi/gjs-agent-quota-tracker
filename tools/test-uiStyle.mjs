@@ -18,7 +18,7 @@ const test = (name, fn) => {
 
 // A stand-in for Gio.Settings: the ui-style string (as `text`) and the two
 // divider texts, with the schema's defaults.
-const DEFAULTS = {[UI_STYLE_KEY]: '{}', 'panel-lead-divider': '|', 'panel-divider': ' '};
+const DEFAULTS = {[UI_STYLE_KEY]: '{}', 'panel-lead-divider': '|', 'panel-profile-divider': '·', 'panel-divider': ' '};
 const fakeSettings = (text = '{}', others = {}) => ({
     values: {...DEFAULTS, ...others, [UI_STYLE_KEY]: text},
     writes: 0,
@@ -280,7 +280,7 @@ test('the tabs: what each holds', () => {
     assert.deepEqual(UI_STYLE_GROUPS.slice(0, 2), pageGroups('shared'));
     assert.equal(rows('shared'), 10);
     assert.ok(rows('topbar') < 50 && rows('popup') < 50, `${rows('topbar')} / ${rows('popup')} rows`);
-    assert.deepEqual(UI_TEXT_SETTINGS.map(t => t.key), ['panel-lead-divider', 'panel-divider']);
+    assert.deepEqual(UI_TEXT_SETTINGS.map(t => t.key), ['panel-lead-divider', 'panel-profile-divider', 'panel-divider']);
 });
 
 // --- the resolved style ---

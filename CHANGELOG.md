@@ -20,6 +20,10 @@ The first release as Agent Quota Tracker. Thanks to @Power-tile for the idea of 
   there is nothing to log in to and no token is touched. Off by default.
 - `gjs -m tools/poll.js --antigravity` checks the Antigravity quota against
   the live API.
+- A provider divider (`panel-profile-divider`, under "Dividers" on the
+  Top-Bar UI tab) between profiles and providers, `·` by default. It used to
+  be the lead divider's `|`, the same line that separates the icon and tier
+  from the gauges.
 
 ### Changed
 - Renamed to Agent Quota Tracker, with its own UUID

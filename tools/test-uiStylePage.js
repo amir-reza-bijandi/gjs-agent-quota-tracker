@@ -171,9 +171,10 @@ test('a model tag value shows the window tag\'s until it has its own', () => {
 });
 
 test('the divider texts are edited, reset and counted here', () => {
-    assert(textRows.size === 2, 'two divider text rows');
+    assert(textRows.size === 3, 'three divider text rows');
     const {control, reset} = textRows.get('panel-divider');
     assert(textRows.get('panel-lead-divider').control.text === '|', 'lead divider shown');
+    assert(textRows.get('panel-profile-divider').control.text === '·', 'provider divider shown');
     assert(!reset.visible, 'no reset at the default');
     const before = resetAll.visible;
     control.text = '┊';

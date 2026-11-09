@@ -76,7 +76,12 @@
     <key name="panel-lead-divider" type="s">
       <default>'|'</default>
       <summary>Lead divider</summary>
-      <description>Text placed between the leading elements (Claude icon, profile tag, subscription tier icon and label) and the gauges, and between profiles. Exactly "|" (the default) draws a thin vertical line; blank or whitespace-only shows no divider at all.</description>
+      <description>Text placed between the leading elements (Claude icon, profile tag, subscription tier icon and label) and the gauges. Exactly "|" (the default) draws a thin vertical line; blank or whitespace-only shows no divider at all.</description>
+    </key>
+    <key name="panel-profile-divider" type="s">
+      <default>'·'</default>
+      <summary>Provider divider</summary>
+      <description>Text placed between two profile blocks (Claude profiles, and the Antigravity block), so it reads apart from the lead divider inside each block. Exactly "|" draws a thin vertical line; blank or whitespace-only leaves a plain gap.</description>
     </key>
     <key name="ui-style" type="s">
       <default>'{}'</default>
